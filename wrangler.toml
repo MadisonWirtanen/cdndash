@@ -1,0 +1,17 @@
+name = "cdndash"
+compatibility_date = "2026-10-01"
+pages_build_output_dir = "./dist"
+
+[vars]
+TARGET_OWNER = "MadisonWirtanen"
+TARGET_REPO = "cdn"
+TARGET_BRANCH = "master"
+PUBLIC_BASE_URL = "https://cdn.003153.xyz"
+DEFAULT_UPLOAD_DIR = "image"
+MAX_UPLOAD_MB = "15"
+ALLOW_DELETE = "true"
+ALLOW_OVERWRITE = "true"
+PROTECTED_PATHS = "index.html,404.html,CNAME,vercel.json,.settings,.deploy"
+# Optional. Set this to your final management hostname after binding a custom domain,
+# for example: image-admin.003153.xyz
+ALLOWED_HOSTS = ""
