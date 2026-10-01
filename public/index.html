@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>CDN Dash</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">C</div>
+        <div>
+          <h1>CDN Dash</h1>
+          <p id="repoMeta">正在读取配置…</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="healthBadge" class="status-badge neutral">检查连接</span>
+        <button id="settingsBtn" class="icon-btn" type="button" title="设置" aria-label="设置">⚙</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="主要功能">
+      <button class="tab active" data-tab="upload" type="button">上传</button>
+      <button class="tab" data-tab="manage" type="button">图片管理</button>
+    </nav>
+
+    <main>
+      <section id="uploadView" class="view active">
+        <div class="panel upload-panel">
+          <div class="path-row">
+            <label for="uploadDir">上传目录</label>
+            <div class="path-input-wrap">
+              <span>/</span>
+              <input id="uploadDir" type="text" autocomplete="off" spellcheck="false" placeholder="image">
+            </div>
+          </div>
+
+          <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="选择图片上传">
+            <div class="drop-icon" aria-hidden="true">↑</div>
+            <h2>拖入、粘贴或选择图片</h2>
+            <p>支持批量选择；图片先在浏览器中处理，再由 Cloudflare 安全提交到 GitHub。</p>
+            <button id="chooseFilesBtn" class="primary-btn" type="button">选择图片</button>
+            <input id="fileInput" type="file" accept="image/*" multiple hidden>
+          </div>
+
+          <div class="upload-options">
+            <label class="check-row"><input id="compressToggle" type="checkbox"> <span>自动转换为 WebP</span></label>
+            <label class="check-row"><input id="overwriteToggle" type="checkbox"> <span>允许覆盖同名图片</span></label>
+            <div class="quality-row">
+              <label for="qualityRange">WebP 质量 <strong id="qualityValue">86%</strong></label>
+              <input id="qualityRange" type="range" min="60" max="100" step="1" value="86">
+            </div>
+          </div>
+        </div>
+
+        <div id="queuePanel" class="panel queue-panel hidden">
+          <div class="section-head">
+            <div>
+              <h2>待上传</h2>
+              <p id="queueSummary">0 张图片</p>
+            </div>
+            <div class="section-actions">
+              <button id="clearQueueBtn" class="ghost-btn" type="button">清空</button>
+              <button id="uploadAllBtn" class="primary-btn" type="button">开始上传</button>
+            </div>
+          </div>
+          <div id="uploadQueue" class="upload-queue"></div>
+        </div>
+      </section>
+
+      <section id="manageView" class="view">
+        <div class="panel manager-panel">
+          <div class="section-head manager-head">
+            <div>
+              <h2>图片管理</h2>
+              <p id="managerPath">/</p>
+            </div>
+            <div class="section-actions">
+              <button id="managerUpBtn" class="ghost-btn" type="button">上一级</button>
+              <button id="managerRefreshBtn" class="ghost-btn" type="button">刷新</button>
+            </div>
+          </div>
+          <div class="manager-toolbar">
+            <input id="managerSearch" type="search" placeholder="筛选当前目录…" autocomplete="off">
+          </div>
+          <div id="managerNotice" class="inline-notice hidden"></div>
+          <div id="managerGrid" class="manager-grid"></div>
+          <div id="managerEmpty" class="empty-state hidden">当前目录没有可显示的图片。</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="settingsBackdrop" class="backdrop hidden"></div>
+  <aside id="settingsDrawer" class="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <h2>设置</h2>
+        <p>这些偏好仅保存在当前浏览器，不会写入 cdn 仓库。</p>
+      </div>
+      <button id="closeSettingsBtn" class="icon-btn" type="button" aria-label="关闭设置">×</button>
+    </div>
+    <div class="drawer-body">
+      <label class="field">
+        <span>默认上传目录</span>
+        <input id="defaultDirSetting" type="text" placeholder="image" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>文件命名</span>
+        <select id="namingSetting">
+          <option value="timestamp">时间戳 + 随机码</option>
+          <option value="original">保留原文件名</option>
+          <option value="hash">内容哈希</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>默认复制格式</span>
+        <select id="copyFormatSetting">
+          <option value="url">URL</option>
+          <option value="markdown">Markdown</option>
+          <option value="html">HTML</option>
+        </select>
+      </label>
+      <label class="check-row drawer-check"><input id="autoCheckSetting" type="checkbox"> <span>上传后检测 CDN 是否可访问</span></label>
+
+      <div class="readonly-config">
+        <h3>固定目标</h3>
+        <dl>
+          <div><dt>仓库</dt><dd id="settingsRepo">-</dd></div>
+          <div><dt>分支</dt><dd id="settingsBranch">-</dd></div>
+          <div><dt>公开地址</dt><dd id="settingsCdn">-</dd></div>
+        </dl>
+      </div>
+      <button id="saveSettingsBtn" class="primary-btn full" type="button">保存设置</button>
+    </div>
+  </aside>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>
