@@ -811,3 +811,11 @@ document.addEventListener('keydown', event => {
 })
 
 void init()
+
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+      .then(registration => registration.update())
+      .catch(error => console.warn('PWA Service Worker registration failed:', error))
+  })
+}

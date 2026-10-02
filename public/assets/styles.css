@@ -177,3 +177,25 @@ dd { margin: 0; word-break: break-all; }
   .manager-grid { grid-template-columns: 1fr; }
   .section-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
+
+/* iPhone standalone/PWA safe-area support. */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .app-shell {
+    padding-top: max(28px, env(safe-area-inset-top));
+    padding-bottom: max(56px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 680px) {
+  @supports (padding: max(0px)) {
+    .app-shell {
+      padding-top: max(18px, env(safe-area-inset-top));
+      padding-bottom: max(36px, env(safe-area-inset-bottom));
+    }
+  }
+}

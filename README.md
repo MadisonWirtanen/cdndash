@@ -155,6 +155,21 @@ CDN Dash 会先确认 GitHub commit，然后可选地轮询 https://cdn.003153.x
 
 它会执行 JavaScript 语法检查、必需文件检查、前端 Secret 引用检查、通用文件上传检查、默认不压缩检查、默认 custom 命名检查以及批量 preflight / commit 流程检查，然后构建 dist。
 
+## PWA / iPhone
+
+CDN Dash 支持作为 PWA 安装到手机主屏幕。
+
+iPhone 安装方式：
+1. 使用 Safari 打开 https://cdndash.003153.xyz 。
+2. 完成 Cloudflare Access 登录。
+3. 点击 Safari 的“分享”按钮。
+4. 选择“添加到主屏幕”。
+5. 从主屏幕打开 CDN Dash，即会以独立 App 窗口运行。
+
+PWA 使用 Prussian Blue 风格图标，并适配 iPhone 安全区域。
+
+Service Worker 只缓存前端应用外壳（CSS、JS、Manifest 和图标），不会缓存 /api/ 请求、文件列表、上传结果或 CDN 文件内容，因此不会改变现有的 Cloudflare Access 和后端权限模型。
+
 ## License
 
 MIT.
