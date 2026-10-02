@@ -30,7 +30,7 @@ export function parseCsv(value) {
 }
 
 export function getRuntimeConfig(env = {}) {
-  const maxUploadMB = Math.max(1, Math.min(25, Number(envString(env, 'MAX_UPLOAD_MB', String(DEFAULTS.maxUploadMB))) || DEFAULTS.maxUploadMB))
+  const maxUploadMB = DEFAULTS.maxUploadMB
   return {
     owner: envString(env, 'TARGET_OWNER', DEFAULTS.owner),
     repo: envString(env, 'TARGET_REPO', DEFAULTS.repo),
