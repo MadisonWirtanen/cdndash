@@ -12,6 +12,6 @@ MAX_UPLOAD_MB = "15"
 ALLOW_DELETE = "true"
 ALLOW_OVERWRITE = "true"
 PROTECTED_PATHS = "index.html,404.html,CNAME,vercel.json,.settings,.deploy"
-# Optional. Set this to your final management hostname after binding a custom domain,
-# for example: image-admin.003153.xyz
-ALLOWED_HOSTS = ""
+# Production API host allowlist. The default pages.dev hostname remains behind Access
+# but is intentionally not allowed to call the GitHub-backed API.
+ALLOWED_HOSTS = "cdndash.003153.xyz"
