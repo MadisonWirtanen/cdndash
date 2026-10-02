@@ -1,4 +1,5 @@
 const $ = id => document.getElementById(id)
+const MiB = 1024 * 1024
 
 const els = {
   repoMeta: $('repoMeta'),
@@ -12,6 +13,7 @@ const els = {
   fileInput: $('fileInput'),
   compressToggle: $('compressToggle'),
   overwriteToggle: $('overwriteToggle'),
+  qualityRow: $('qualityRow'),
   qualityRange: $('qualityRange'),
   qualityValue: $('qualityValue'),
   queuePanel: $('queuePanel'),
@@ -51,21 +53,33 @@ const state = {
 
 function loadSettings() {
   const defaults = {
+    version: 2,
     defaultDir: 'image',
-    compress: true,
+    compress: false,
     quality: 86,
-    naming: 'timestamp',
+    naming: 'custom',
     copyFormat: 'url',
     autoCheck: true
   }
   try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem('cdndash.settings') || '{}') }
+    const saved = JSON.parse(localStorage.getItem('cdndash.settings') || '{}')
+    if (!saved.version || saved.version < 2) {
+      return {
+        ...defaults,
+        defaultDir: saved.defaultDir || defaults.defaultDir,
+        quality: Number(saved.quality) || defaults.quality,
+        copyFormat: saved.copyFormat || defaults.copyFormat,
+        autoCheck: saved.autoCheck ?? defaults.autoCheck
+      }
+    }
+    return { ...defaults, ...saved, version: 2 }
   } catch {
     return defaults
   }
 }
 
 function persistSettings() {
+  state.settings.version = 2
   localStorage.setItem('cdndash.settings', JSON.stringify(state.settings))
 }
 
@@ -90,7 +104,7 @@ function toast(message, type = '') {
   node.className = `toast ${type}`.trim()
   node.textContent = message
   els.toastRegion.append(node)
-  setTimeout(() => node.remove(), 3200)
+  setTimeout(() => node.remove(), 3600)
 }
 
 function formatBytes(bytes) {
@@ -106,7 +120,7 @@ function sanitizeFilename(name) {
     .replace(/[\\/\u0000-\u001f\u007f]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
-    .replace(/^\.+$/, 'image') || 'image'
+    .replace(/^\.+$/, 'file') || 'file'
 }
 
 function normalizeDir(value) {
@@ -118,8 +132,14 @@ function normalizeDir(value) {
     .join('/')
 }
 
+function joinPath(dir, name) {
+  const cleanDir = normalizeDir(dir)
+  const cleanName = sanitizeFilename(name)
+  return cleanDir ? `${cleanDir}/${cleanName}` : cleanName
+}
+
 function extensionFor(fileName, mimeType) {
-  const match = String(fileName).match(/\.([A-Za-z0-9]{1,8})$/)
+  const match = String(fileName).match(/\.([A-Za-z0-9]{1,12})$/)
   if (match) return `.${match[1].toLowerCase()}`
   const byType = {
     'image/jpeg': '.jpg',
@@ -127,9 +147,16 @@ function extensionFor(fileName, mimeType) {
     'image/webp': '.webp',
     'image/gif': '.gif',
     'image/svg+xml': '.svg',
-    'image/avif': '.avif'
+    'image/avif': '.avif',
+    'application/pdf': '.pdf',
+    'application/zip': '.zip',
+    'text/plain': '.txt'
   }
-  return byType[mimeType] || '.img'
+  return byType[mimeType] || ''
+}
+
+function baseNameWithoutExtension(name) {
+  return String(name).replace(/\.[^.]+$/, '')
 }
 
 function timestampName(ext) {
@@ -146,11 +173,16 @@ async function hashName(blob, ext) {
   return `${hex.slice(0, 20)}${ext}`
 }
 
-async function blobToWebp(file, quality) {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    return { blob: file, converted: false }
-  }
+function isCompressibleImage(file) {
+  return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+}
 
+function looksLikeImage(name, mime = '') {
+  return mime.startsWith('image/') || /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(String(name))
+}
+
+async function blobToWebp(file, quality) {
+  if (!isCompressibleImage(file)) return { blob: file, converted: false }
   let bitmap
   try {
     bitmap = await createImageBitmap(file)
@@ -171,36 +203,45 @@ async function blobToWebp(file, quality) {
 }
 
 async function prepareFile(file) {
-  if (!file.type.startsWith('image/')) throw new Error(`${file.name || '文件'} 不是图片`)
-  if (file.size > 50 * 1024 * 1024) throw new Error(`${file.name} 超过浏览器处理上限 50 MB`)
+  const hardLimit = state.config?.maxUploadBytes || 25 * MiB
+  if (file.size > hardLimit) {
+    throw new Error(`${file.name || '文件'} 大小为 ${formatBytes(file.size)}，超过 25 MB 限制，未加入上传队列`)
+  }
+  if (file.size <= 0) throw new Error(`${file.name || '文件'} 为空`)
 
-  const shouldCompress = els.compressToggle.checked
-  const processed = shouldCompress
+  const processed = els.compressToggle.checked && isCompressibleImage(file)
     ? await blobToWebp(file, Number(els.qualityRange.value))
     : { blob: file, converted: false }
 
-  let ext = processed.converted ? '.webp' : extensionFor(file.name, processed.blob.type)
+  const originalName = sanitizeFilename(file.name || 'file')
+  const ext = processed.converted ? '.webp' : extensionFor(originalName, processed.blob.type)
   let filename
-  if (state.settings.naming === 'original') {
-    const original = sanitizeFilename(file.name)
-    filename = processed.converted ? original.replace(/\.[^.]+$/, '') + '.webp' : original
+
+  if (state.settings.naming === 'timestamp') {
+    filename = timestampName(ext)
   } else if (state.settings.naming === 'hash') {
     filename = await hashName(processed.blob, ext)
   } else {
-    filename = timestampName(ext)
+    filename = processed.converted
+      ? `${baseNameWithoutExtension(originalName)}.webp`
+      : originalName
   }
 
+  const isImage = looksLikeImage(filename, processed.blob.type)
   return {
     id: crypto.randomUUID(),
-    originalName: file.name || filename,
+    originalName,
     originalSize: file.size,
     blob: processed.blob,
     filename,
-    previewUrl: URL.createObjectURL(processed.blob),
+    mime: processed.blob.type || file.type || 'application/octet-stream',
+    isImage,
+    previewUrl: isImage ? URL.createObjectURL(processed.blob) : null,
     status: 'ready',
-    statusText: processed.converted && processed.blob.size < file.size
+    statusText: processed.converted
       ? `已转换 WebP · ${formatBytes(file.size)} → ${formatBytes(processed.blob.size)}`
       : formatBytes(processed.blob.size),
+    staged: null,
     result: null
   }
 }
@@ -210,8 +251,7 @@ async function addFiles(fileList) {
   if (!files.length) return
   for (const file of files) {
     try {
-      const item = await prepareFile(file)
-      state.queue.push(item)
+      state.queue.push(await prepareFile(file))
     } catch (error) {
       toast(error.message, 'bad')
     }
@@ -225,37 +265,57 @@ function setQueueStatus(item, status, text) {
   renderQueue()
 }
 
+function fileIconFor(name, kind) {
+  if (kind === 'video') return '▶'
+  if (kind === 'audio') return '♪'
+  if (kind === 'archive') return 'ZIP'
+  if (kind === 'document') return /\.pdf$/i.test(name) ? 'PDF' : 'DOC'
+  if (kind === 'code') return '</>'
+  if (kind === 'font') return 'Aa'
+  return 'FILE'
+}
+
 function renderQueue() {
   els.queuePanel.classList.toggle('hidden', state.queue.length === 0)
-  els.queueSummary.textContent = `${state.queue.length} 张图片`
+  els.queueSummary.textContent = `${state.queue.length} 个文件`
   els.uploadQueue.replaceChildren()
 
   for (const item of state.queue) {
     const card = document.createElement('div')
     card.className = 'queue-item'
 
-    const img = document.createElement('img')
-    img.className = 'queue-thumb'
-    img.src = item.previewUrl
-    img.alt = ''
+    const preview = item.isImage && item.previewUrl
+      ? document.createElement('img')
+      : document.createElement('div')
+    if (preview instanceof HTMLImageElement) {
+      preview.className = 'queue-thumb'
+      preview.src = item.previewUrl
+      preview.alt = ''
+    } else {
+      preview.className = 'queue-file-icon'
+      preview.textContent = fileIconFor(item.filename, guessKind(item.filename))
+    }
 
     const main = document.createElement('div')
     main.className = 'queue-main'
     const input = document.createElement('input')
     input.className = 'queue-name'
     input.value = item.filename
-    input.disabled = item.status === 'uploading' || item.status === 'uploaded'
+    input.disabled = state.uploading || Boolean(item.result)
     input.addEventListener('change', () => {
       item.filename = sanitizeFilename(input.value)
       input.value = item.filename
+      item.isImage = looksLikeImage(item.filename, item.mime)
     })
 
     const meta = document.createElement('div')
     meta.className = 'queue-meta'
-    meta.textContent = item.originalName === item.filename ? formatBytes(item.blob.size) : `原文件：${item.originalName}`
+    meta.textContent = item.originalName === item.filename
+      ? formatBytes(item.blob.size)
+      : `原文件：${item.originalName} · ${formatBytes(item.blob.size)}`
 
     const status = document.createElement('div')
-    const statusClass = item.status === 'uploaded' ? 'good' : item.status === 'error' ? 'bad' : item.status === 'checking' ? 'pending' : ''
+    const statusClass = item.status === 'uploaded' ? 'good' : item.status === 'error' ? 'bad' : ['staging', 'committing', 'checking'].includes(item.status) ? 'pending' : ''
     status.className = `queue-status ${statusClass}`.trim()
     status.textContent = item.statusText
 
@@ -263,19 +323,15 @@ function renderQueue() {
 
     const actions = document.createElement('div')
     actions.className = 'queue-actions'
-
     if (item.result?.publicUrl) {
       actions.append(
-        makeButton('复制链接', 'mini-btn', () => copyImageLink(item.result.publicUrl, item.filename)),
+        makeButton('复制链接', 'mini-btn', () => copyFileLink(item.result.publicUrl, item.filename, item.isImage)),
         makeButton('打开', 'mini-btn', () => window.open(item.result.publicUrl, '_blank', 'noopener'))
       )
     }
+    if (!state.uploading) actions.append(makeButton('移除', 'mini-btn', () => removeQueueItem(item.id)))
 
-    if (item.status !== 'uploading') {
-      actions.append(makeButton('移除', 'mini-btn', () => removeQueueItem(item.id)))
-    }
-
-    card.append(img, main, actions)
+    card.append(preview, main, actions)
     els.uploadQueue.append(card)
   }
 
@@ -295,57 +351,135 @@ function makeButton(text, className, handler) {
 function removeQueueItem(id) {
   const index = state.queue.findIndex(x => x.id === id)
   if (index === -1) return
-  URL.revokeObjectURL(state.queue[index].previewUrl)
+  if (state.queue[index].previewUrl) URL.revokeObjectURL(state.queue[index].previewUrl)
   state.queue.splice(index, 1)
   renderQueue()
 }
 
 function clearQueue() {
   if (state.uploading) return
-  state.queue.forEach(item => URL.revokeObjectURL(item.previewUrl))
+  state.queue.forEach(item => item.previewUrl && URL.revokeObjectURL(item.previewUrl))
   state.queue = []
   renderQueue()
 }
 
 async function uploadAll() {
   if (state.uploading || !state.config) return
+  const pending = state.queue.filter(item => !item.result)
+  if (!pending.length) return
+
   const dir = normalizeDir(els.uploadDir.value)
   els.uploadDir.value = dir
   state.settings.defaultDir = dir || state.settings.defaultDir
   persistSettings()
 
+  const targets = pending.map(item => ({
+    item,
+    path: joinPath(dir, item.filename)
+  }))
+
+  const duplicate = targets.find((target, index) => targets.findIndex(other => other.path === target.path) !== index)
+  if (duplicate) {
+    toast(`上传队列中存在重复路径：${duplicate.path}`, 'bad')
+    return
+  }
+
   state.uploading = true
+  pending.forEach(item => {
+    item.staged = null
+    item.status = 'staging'
+    item.statusText = '正在检查上传批次…'
+  })
   renderQueue()
-  let success = 0
 
-  for (const item of state.queue) {
-    if (item.result) continue
-    try {
-      if (item.blob.size > state.config.maxUploadBytes) {
-        throw new Error(`处理后仍超过 ${state.config.maxUploadMB} MB 限制`)
+  let snapshot
+  try {
+    snapshot = await fetchJson('/api/preflight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paths: targets.map(target => target.path),
+        overwrite: els.overwriteToggle.checked
+      })
+    })
+  } catch (error) {
+    const conflicts = error.data?.details?.conflicts
+    if (Array.isArray(conflicts)) {
+      for (const conflict of conflicts) {
+        const target = targets.find(entry => entry.path === conflict.path)
+        if (target) setQueueStatus(target.item, 'error', conflict.reason)
       }
-      setQueueStatus(item, 'uploading', '正在提交到 GitHub…')
-      const form = new FormData()
-      form.set('file', item.blob, item.filename)
-      form.set('dir', dir)
-      form.set('filename', item.filename)
-      form.set('overwrite', String(els.overwriteToggle.checked))
-
-      const result = await fetchJson('/api/upload', { method: 'POST', body: form })
-      item.result = result
-      item.filename = result.name
-      setQueueStatus(item, 'uploaded', result.overwritten ? 'GitHub 已覆盖更新' : 'GitHub 已提交')
-      success += 1
-      if (state.settings.autoCheck) void pollCdn(item)
-    } catch (error) {
-      const suffix = error.status === 409 ? '；如确认需要替换，请勾选“允许覆盖同名图片”' : ''
-      setQueueStatus(item, 'error', `${error.message}${suffix}`)
     }
+    pending.filter(item => item.status !== 'error').forEach(item => setQueueStatus(item, 'ready', '未上传'))
+    state.uploading = false
+    renderQueue()
+    toast(error.message, 'bad')
+    return
+  }
+
+  let stageFailed = false
+  for (let index = 0; index < targets.length; index += 1) {
+    const target = targets[index]
+    try {
+      setQueueStatus(target.item, 'staging', `正在暂存文件 ${index + 1}/${targets.length}…`)
+      const form = new FormData()
+      form.set('file', target.item.blob, target.item.filename)
+      form.set('path', target.path)
+      form.set('expectedHeadSha', snapshot.baseCommitSha)
+      target.item.staged = await fetchJson('/api/stage', { method: 'POST', body: form })
+      setQueueStatus(target.item, 'staging', '已暂存，等待整批提交')
+    } catch (error) {
+      stageFailed = true
+      setQueueStatus(target.item, 'error', error.message)
+      break
+    }
+  }
+
+  if (stageFailed) {
+    pending.filter(item => item.status === 'staging').forEach(item => setQueueStatus(item, 'ready', '本批次未提交，可重新上传'))
+    state.uploading = false
+    renderQueue()
+    toast('批次中有文件暂存失败，master 未发生任何变化', 'bad')
+    return
+  }
+
+  pending.forEach(item => setQueueStatus(item, 'committing', '正在创建单一 Git commit…'))
+  let committed
+  try {
+    committed = await fetchJson('/api/commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        baseCommitSha: snapshot.baseCommitSha,
+        baseTreeSha: snapshot.baseTreeSha,
+        items: targets.map(target => ({
+          path: target.path,
+          blobSha: target.item.staged.blobSha
+        }))
+      })
+    })
+  } catch (error) {
+    pending.forEach(item => setQueueStatus(item, 'error', `整批未提交：${error.message}`))
+    state.uploading = false
+    renderQueue()
+    toast('整批提交失败，master 未更新', 'bad')
+    return
+  }
+
+  const results = new Map(committed.items.map(item => [item.path, item]))
+  for (const target of targets) {
+    target.item.result = results.get(target.path)
+    target.item.staged = null
+    setQueueStatus(target.item, 'uploaded', `GitHub 已提交 · commit ${committed.commit.slice(0, 7)}`)
   }
 
   state.uploading = false
   renderQueue()
-  if (success) toast(`已完成 ${success} 张图片的 GitHub 提交`, 'good')
+  toast(`已将 ${committed.count} 个文件合并为 1 个 Git commit`, 'good')
+
+  if (state.settings.autoCheck) {
+    for (const target of targets) void pollCdn(target.item)
+  }
 }
 
 async function pollCdn(item) {
@@ -364,24 +498,24 @@ async function pollCdn(item) {
         return
       }
     } catch {
-      // Deployment propagation can temporarily fail; retry quietly.
+      // CDN propagation can temporarily fail.
     }
     await new Promise(resolve => setTimeout(resolve, 2000))
   }
 
   item.status = 'uploaded'
-  item.statusText = 'GitHub 已提交 · CDN 尚未检测到，可稍后刷新确认'
+  item.statusText = 'GitHub 已提交 · CDN 暂未检测到，可稍后刷新确认'
   renderQueue()
 }
 
-function copyValueFor(url, name, format = state.settings.copyFormat) {
-  if (format === 'markdown') return `![${name}](${url})`
-  if (format === 'html') return `<img src="${url}" alt="${name}">`
+function copyValueFor(url, name, isImage, format = state.settings.copyFormat) {
+  if (format === 'markdown') return isImage ? `![${name}](${url})` : `[${name}](${url})`
+  if (format === 'html') return isImage ? `<img src="${url}" alt="${name}">` : `<a href="${url}">${name}</a>`
   return url
 }
 
-async function copyImageLink(url, name, format) {
-  const value = copyValueFor(url, name, format)
+async function copyFileLink(url, name, isImage, format) {
+  const value = copyValueFor(url, name, isImage, format)
   try {
     await navigator.clipboard.writeText(value)
   } catch {
@@ -406,7 +540,7 @@ function switchTab(name) {
 
 async function loadManager(path = '') {
   state.managerPath = normalizeDir(path)
-  els.managerPath.textContent = `/${state.managerPath}`.replace(/\/$/, '') || '/'
+  els.managerPath.textContent = state.managerPath ? `/${state.managerPath}` : '/'
   els.managerGrid.replaceChildren()
   els.managerEmpty.classList.add('hidden')
   els.managerNotice.classList.add('hidden')
@@ -415,7 +549,7 @@ async function loadManager(path = '') {
     const data = await fetchJson(`/api/list?path=${encodeURIComponent(state.managerPath)}`)
     state.managerItems = data.items
     if (data.limited) {
-      els.managerNotice.textContent = '当前目录项目很多；GitHub Contents API 最多返回 1000 项，建议继续使用子目录组织图片。'
+      els.managerNotice.textContent = '当前目录项目很多；GitHub Contents API 最多返回 1000 项，建议继续使用子目录组织文件。'
       els.managerNotice.classList.remove('hidden')
     }
     renderManager()
@@ -423,6 +557,17 @@ async function loadManager(path = '') {
     els.managerNotice.textContent = error.message
     els.managerNotice.classList.remove('hidden')
   }
+}
+
+function guessKind(name) {
+  if (/\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(name)) return 'image'
+  if (/\.(?:mp4|m4v|mov|webm|mkv|avi)$/i.test(name)) return 'video'
+  if (/\.(?:mp3|m4a|aac|wav|ogg|flac)$/i.test(name)) return 'audio'
+  if (/\.(?:zip|7z|rar|tar|gz|bz2|xz)$/i.test(name)) return 'archive'
+  if (/\.(?:pdf|docx?|xlsx?|pptx?)$/i.test(name)) return 'document'
+  if (/\.(?:html?|css|js|mjs|cjs|json|xml|ya?ml|toml|ini|md|txt|csv)$/i.test(name)) return 'code'
+  if (/\.(?:ttf|otf|woff2?|eot)$/i.test(name)) return 'font'
+  return 'other'
 }
 
 function renderManager() {
@@ -454,11 +599,21 @@ function renderManager() {
 
     const card = document.createElement('div')
     card.className = 'item-card'
-    const image = document.createElement('img')
-    image.className = 'image-preview'
-    image.loading = 'lazy'
-    image.src = item.publicUrl
-    image.alt = item.name
+    let preview
+    if (item.isImage) {
+      preview = document.createElement('img')
+      preview.className = 'image-preview'
+      preview.loading = 'lazy'
+      preview.src = item.publicUrl
+      preview.alt = item.name
+    } else {
+      preview = document.createElement('div')
+      preview.className = 'file-preview'
+      const badge = document.createElement('span')
+      badge.className = 'file-kind-badge'
+      badge.textContent = fileIconFor(item.name, item.kind || guessKind(item.name))
+      preview.append(badge)
+    }
 
     const info = document.createElement('div')
     info.className = 'image-info'
@@ -471,33 +626,64 @@ function renderManager() {
     const actions = document.createElement('div')
     actions.className = 'image-actions'
     actions.append(
-      makeButton('复制', 'mini-btn', () => copyImageLink(item.publicUrl, item.name)),
-      makeButton('Markdown', 'mini-btn', () => copyImageLink(item.publicUrl, item.name, 'markdown')),
+      makeButton('复制', 'mini-btn', () => copyFileLink(item.publicUrl, item.name, item.isImage)),
+      makeButton('Markdown', 'mini-btn', () => copyFileLink(item.publicUrl, item.name, item.isImage, 'markdown')),
       makeButton('打开', 'mini-btn', () => window.open(item.publicUrl, '_blank', 'noopener'))
     )
+    if (state.config?.capabilities.rename && !item.protected) {
+      actions.append(makeButton('重命名', 'mini-btn', () => void renameManagedFile(item)))
+    }
     if (state.config?.capabilities.delete && !item.protected) {
-      const del = makeButton('删除', 'danger-btn', () => deleteManagedImage(item))
-      actions.append(del)
+      actions.append(makeButton('删除', 'danger-btn', () => void deleteManagedFile(item)))
     }
     info.append(name, size, actions)
-    card.append(image, info)
+    card.append(preview, info)
     els.managerGrid.append(card)
   }
 }
 
-async function deleteManagedImage(item) {
-  if (!confirm(`确定删除以下图片吗？\n\n${item.path}\n\n删除后旧 CDN 链接将失效。`)) return
+async function renameManagedFile(item) {
+  const requested = prompt('请输入新的文件名（仅修改文件名，不移动目录）：', item.name)
+  if (requested == null) return
+  const newName = sanitizeFilename(requested)
+  if (!newName || newName === item.name) return
+
+  const slash = item.path.lastIndexOf('/')
+  const dir = slash >= 0 ? item.path.slice(0, slash) : ''
+  const newPath = dir ? `${dir}/${newName}` : newName
+  const warning = `重命名会改变 CDN 路径，原链接将失效。\n\n原路径：/${item.path}\n新路径：/${newPath}\n\n确认继续吗？`
+  if (!confirm(warning)) return
+
+  try {
+    await fetchJson('/api/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: item.path, newName, confirm: item.path })
+    })
+    toast('文件已重命名', 'good')
+    await loadManager(state.managerPath)
+  } catch (error) {
+    toast(error.message, 'bad')
+  }
+}
+
+async function deleteManagedFile(item) {
+  if (!confirm(`确定删除以下文件吗？\n\n${item.path}\n\n删除后旧 CDN 链接将失效。`)) return
   try {
     await fetchJson('/api/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: item.path, sha: item.sha, confirm: item.path })
     })
-    toast('图片已从 GitHub 删除', 'good')
+    toast('文件已从 GitHub 删除', 'good')
     await loadManager(state.managerPath)
   } catch (error) {
     toast(error.message, 'bad')
   }
+}
+
+function updateCompressUi() {
+  els.qualityRow.classList.toggle('hidden', !els.compressToggle.checked)
 }
 
 function openSettings() {
@@ -547,16 +733,15 @@ async function checkHealth() {
 async function init() {
   try {
     state.config = await fetchJson('/api/config')
-    if (!localStorage.getItem('cdndash.settings')) {
-      state.settings.defaultDir = state.config.defaultUploadDir || 'image'
-      persistSettings()
-    }
+    state.settings.defaultDir ||= state.config.defaultUploadDir || 'image'
+    persistSettings()
     els.repoMeta.textContent = `${state.config.owner}/${state.config.repo} · ${state.config.branch}`
-    els.uploadDir.value = state.settings.defaultDir || state.config.defaultUploadDir
+    els.uploadDir.value = state.settings.defaultDir
     els.compressToggle.checked = state.settings.compress
     els.qualityRange.value = String(state.settings.quality)
     els.qualityValue.textContent = `${state.settings.quality}%`
     els.overwriteToggle.disabled = !state.config.capabilities.overwrite
+    updateCompressUi()
     await checkHealth()
   } catch (error) {
     els.repoMeta.textContent = '配置读取失败'
@@ -595,12 +780,13 @@ els.dropZone.addEventListener('drop', event => void addFiles(event.dataTransfer.
 document.addEventListener('paste', event => {
   const target = event.target
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return
-  const files = [...(event.clipboardData?.files || [])].filter(file => file.type.startsWith('image/'))
+  const files = [...(event.clipboardData?.files || [])]
   if (files.length) void addFiles(files)
 })
 els.compressToggle.addEventListener('change', () => {
   state.settings.compress = els.compressToggle.checked
   persistSettings()
+  updateCompressUi()
 })
 els.qualityRange.addEventListener('input', () => {
   els.qualityValue.textContent = `${els.qualityRange.value}%`

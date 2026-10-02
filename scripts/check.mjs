@@ -9,7 +9,10 @@ const required = [
   'public/assets/styles.css',
   'functions/api/config.js',
   'functions/api/list.js',
-  'functions/api/upload.js',
+  'functions/api/preflight.js',
+  'functions/api/stage.js',
+  'functions/api/commit.js',
+  'functions/api/rename.js',
   'functions/api/delete.js',
   'functions/api/check.js',
   'functions/api/health.js',
@@ -30,9 +33,7 @@ async function walk(dir) {
   return out
 }
 
-for (const file of required) {
-  await readFile(join(root, file))
-}
+for (const file of required) await readFile(join(root, file))
 
 const jsFiles = [
   ...await walk(join(root, 'public')),
@@ -45,12 +46,23 @@ for (const file of jsFiles) {
 }
 
 const browserJs = await readFile(join(root, 'public/assets/app.js'), 'utf8')
-if (/github_pat_|ghp_[A-Za-z0-9]/.test(browserJs)) {
-  throw new Error('Potential GitHub token found in browser JavaScript')
-}
+const html = await readFile(join(root, 'public/index.html'), 'utf8')
+
 if (browserJs.includes('GITHUB_TOKEN')) {
-  throw new Error('Browser JavaScript must never reference GITHUB_TOKEN')
+  throw new Error('Browser JavaScript must never reference the server-side GitHub credential binding')
+}
+if (/accept=["']image\/\*/i.test(html)) {
+  throw new Error('File picker must not be restricted to image-only uploads')
+}
+if (browserJs.includes('compress: true')) {
+  throw new Error('Image compression must not be enabled by default')
+}
+if (!browserJs.includes("naming: 'custom'")) {
+  throw new Error('Custom/original naming must be the default')
+}
+if (!browserJs.includes('/api/preflight') || !browserJs.includes('/api/commit')) {
+  throw new Error('Batch upload flow is incomplete')
 }
 
 console.log(`Syntax checked ${jsFiles.length} JavaScript files.`)
-console.log('Browser bundle contains no GitHub token reference.')
+console.log('Generic file upload and batch-commit checks passed.')

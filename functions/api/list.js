@@ -1,4 +1,4 @@
-import { getRuntimeConfig, isImageName, isProtectedPath, normalizeRepoPath, publicUrlForPath } from '../_lib/config.js'
+import { fileKind, getRuntimeConfig, isImageName, isProtectedPath, normalizeRepoPath, publicUrlForPath } from '../_lib/config.js'
 import { getContent, githubErrorMessage } from '../_lib/github.js'
 import { errorJson, json, requestPolicyResponse } from '../_lib/http.js'
 
@@ -19,17 +19,19 @@ export async function onRequestGet(context) {
     if (!Array.isArray(result.data)) return errorJson(400, '该路径不是目录')
 
     const items = result.data
-      .filter(item => item.type === 'dir' || (item.type === 'file' && isImageName(item.name)))
+      .filter(item => item.type === 'dir' || item.type === 'file')
       .map(item => item.type === 'dir'
         ? { type: 'dir', name: item.name, path: item.path }
         : {
-            type: 'image',
+            type: 'file',
             name: item.name,
             path: item.path,
             sha: item.sha,
             size: item.size || 0,
             publicUrl: publicUrlForPath(item.path, config),
-            protected: isProtectedPath(item.path, config)
+            protected: isProtectedPath(item.path, config),
+            isImage: isImageName(item.name),
+            kind: fileKind(item.name)
           })
       .sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name, 'zh-CN') : a.type === 'dir' ? -1 : 1)
 

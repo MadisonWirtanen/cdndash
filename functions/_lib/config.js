@@ -4,9 +4,10 @@ const DEFAULTS = Object.freeze({
   branch: 'master',
   publicBaseUrl: 'https://cdn.003153.xyz',
   defaultUploadDir: 'image',
-  maxUploadMB: 15,
+  maxUploadMB: 25,
   allowDelete: true,
   allowOverwrite: true,
+  allowRename: true,
   protectedPaths: ['index.html', '404.html', 'CNAME', 'vercel.json', '.settings', '.deploy']
 })
 
@@ -29,7 +30,7 @@ export function parseCsv(value) {
 }
 
 export function getRuntimeConfig(env = {}) {
-  const maxUploadMB = Math.max(1, Math.min(50, Number(envString(env, 'MAX_UPLOAD_MB', String(DEFAULTS.maxUploadMB))) || DEFAULTS.maxUploadMB))
+  const maxUploadMB = Math.max(1, Math.min(25, Number(envString(env, 'MAX_UPLOAD_MB', String(DEFAULTS.maxUploadMB))) || DEFAULTS.maxUploadMB))
   return {
     owner: envString(env, 'TARGET_OWNER', DEFAULTS.owner),
     repo: envString(env, 'TARGET_REPO', DEFAULTS.repo),
@@ -40,6 +41,7 @@ export function getRuntimeConfig(env = {}) {
     maxUploadBytes: maxUploadMB * 1024 * 1024,
     allowDelete: envBool(env, 'ALLOW_DELETE', DEFAULTS.allowDelete),
     allowOverwrite: envBool(env, 'ALLOW_OVERWRITE', DEFAULTS.allowOverwrite),
+    allowRename: envBool(env, 'ALLOW_RENAME', DEFAULTS.allowRename),
     protectedPaths: parseCsv(envString(env, 'PROTECTED_PATHS', DEFAULTS.protectedPaths.join(','))).map(normalizeRepoPath),
     allowedHosts: parseCsv(envString(env, 'ALLOWED_HOSTS', ''))
   }
@@ -98,4 +100,16 @@ export function publicUrlForPath(path, config) {
 
 export function isImageName(name) {
   return /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(String(name))
+}
+
+export function fileKind(name) {
+  const value = String(name)
+  if (isImageName(value)) return 'image'
+  if (/\.(?:mp4|m4v|mov|webm|mkv|avi)$/i.test(value)) return 'video'
+  if (/\.(?:mp3|m4a|aac|wav|ogg|flac)$/i.test(value)) return 'audio'
+  if (/\.(?:zip|7z|rar|tar|gz|bz2|xz)$/i.test(value)) return 'archive'
+  if (/\.(?:pdf|docx?|xlsx?|pptx?)$/i.test(value)) return 'document'
+  if (/\.(?:html?|css|js|mjs|cjs|json|xml|ya?ml|toml|ini|md|txt|csv)$/i.test(value)) return 'code'
+  if (/\.(?:ttf|otf|woff2?|eot)$/i.test(value)) return 'font'
+  return 'other'
 }

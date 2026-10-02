@@ -102,14 +102,16 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .section-actions { display: flex; gap: 8px; }
 .upload-queue { display: grid; gap: 10px; margin-top: 16px; }
 .queue-item { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; }
-.queue-thumb { width: 58px; height: 58px; object-fit: cover; border-radius: 9px; background: var(--bg); }
+.queue-thumb, .queue-file-icon { width: 58px; height: 58px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); }
+.queue-thumb { object-fit: cover; }
+.queue-file-icon { display: grid; place-items: center; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .03em; }
 .queue-main { min-width: 0; }
 .queue-name { width: 100%; border: 0; border-bottom: 1px dashed var(--line); outline: 0; background: transparent; padding: 2px 0 4px; font-weight: 620; }
 .queue-meta, .queue-status { color: var(--muted); font-size: 12px; margin-top: 5px; word-break: break-all; }
 .queue-status.good { color: var(--success); }
 .queue-status.bad { color: var(--danger); }
 .queue-status.pending { color: var(--warning); }
-.queue-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 250px; }
+.queue-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 280px; }
 
 .manager-panel { padding: 18px; min-height: 420px; }
 .manager-head { margin-bottom: 13px; }
@@ -120,9 +122,12 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .item-card { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface-2); min-width: 0; }
 .folder-card { min-height: 110px; display: flex; align-items: center; gap: 12px; padding: 16px; cursor: pointer; }
 .folder-card:hover { border-color: var(--accent); }
-.folder-icon { font-size: 30px; }
+.folder-icon { font-size: 30px; color: var(--accent); }
 .folder-name { font-weight: 650; word-break: break-all; }
-.image-preview { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; display: block; background: repeating-conic-gradient(#ddd 0 25%, #f7f7f7 0 50%) 0 / 16px 16px; }
+.image-preview, .file-preview { aspect-ratio: 4 / 3; width: 100%; display: block; background: var(--bg); }
+.image-preview { object-fit: cover; background: repeating-conic-gradient(#ddd 0 25%, #f7f7f7 0 50%) 0 / 16px 16px; }
+.file-preview { display: grid; place-items: center; }
+.file-kind-badge { min-width: 74px; min-height: 62px; display: grid; place-items: center; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); font-size: 16px; font-weight: 800; letter-spacing: .04em; box-shadow: var(--shadow); }
 .image-info { padding: 10px; }
 .image-name { font-weight: 650; word-break: break-all; }
 .image-size { color: var(--muted); font-size: 12px; margin-top: 4px; }
@@ -146,7 +151,7 @@ dl > div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px;
 dt { color: var(--muted); }
 dd { margin: 0; word-break: break-all; }
 
-.toast-region { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: grid; gap: 8px; width: min(360px, calc(100vw - 36px)); }
+.toast-region { position: fixed; right: 18px; bottom: 18px; z-index: 40; display: grid; gap: 8px; width: min(390px, calc(100vw - 36px)); }
 .toast { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 11px; padding: 11px 13px; animation: toast-in .18s ease; }
 .toast.good { border-left: 4px solid var(--success); }
 .toast.bad { border-left: 4px solid var(--danger); }
@@ -163,7 +168,7 @@ dd { margin: 0; word-break: break-all; }
   .quality-row { width: 100%; min-width: 0; }
   .quality-row input { flex: 1; }
   .queue-item { grid-template-columns: 52px minmax(0, 1fr); }
-  .queue-thumb { width: 52px; height: 52px; }
+  .queue-thumb, .queue-file-icon { width: 52px; height: 52px; }
   .queue-actions { grid-column: 1 / -1; justify-content: flex-start; max-width: none; }
   .manager-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

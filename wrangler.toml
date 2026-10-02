@@ -8,10 +8,9 @@ TARGET_REPO = "cdn"
 TARGET_BRANCH = "master"
 PUBLIC_BASE_URL = "https://cdn.003153.xyz"
 DEFAULT_UPLOAD_DIR = "image"
-MAX_UPLOAD_MB = "15"
+MAX_UPLOAD_MB = "25"
 ALLOW_DELETE = "true"
 ALLOW_OVERWRITE = "true"
+ALLOW_RENAME = "true"
 PROTECTED_PATHS = "index.html,404.html,CNAME,vercel.json,.settings,.deploy"
-# Production API host allowlist. The default pages.dev hostname remains behind Access
-# but is intentionally not allowed to call the GitHub-backed API.
 ALLOWED_HOSTS = "cdndash.003153.xyz"

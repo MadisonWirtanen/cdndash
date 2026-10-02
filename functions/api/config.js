@@ -17,7 +17,8 @@ export function onRequestGet(context) {
     protectedPaths: config.protectedPaths,
     capabilities: {
       delete: config.allowDelete,
-      overwrite: config.allowOverwrite
+      overwrite: config.allowOverwrite,
+      rename: config.allowRename
     }
   })
 }

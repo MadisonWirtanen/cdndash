@@ -28,30 +28,67 @@ export async function githubRequest(env, path, init = {}) {
   return { ok: response.ok, status: response.status, data, headers: response.headers }
 }
 
+function repoBase(config) {
+  return `/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}`
+}
+
 export async function getContent(env, config, path = '') {
   const encoded = encodeRepoPath(path)
   const suffix = encoded ? `/contents/${encoded}` : '/contents'
-  return githubRequest(env, `/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}${suffix}?ref=${encodeURIComponent(config.branch)}`)
+  return githubRequest(env, `${repoBase(config)}${suffix}?ref=${encodeURIComponent(config.branch)}`)
 }
 
-export async function putContent(env, config, path, contentBase64, sha) {
-  const encoded = encodeRepoPath(path)
-  const payload = {
-    message: sha ? `cdn: update ${path}` : `cdn: upload ${path}`,
-    content: contentBase64,
-    branch: config.branch,
-    ...(sha ? { sha } : {})
-  }
-  return githubRequest(env, `/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encoded}`, {
-    method: 'PUT',
+export async function getBranch(env, config) {
+  return githubRequest(env, `${repoBase(config)}/branches/${encodeURIComponent(config.branch)}`)
+}
+
+export function branchSnapshot(result) {
+  const commitSha = result?.data?.commit?.sha
+  const treeSha = result?.data?.commit?.commit?.tree?.sha
+  if (!commitSha || !treeSha) throw new Error('无法读取 GitHub 分支快照')
+  return { commitSha, treeSha }
+}
+
+export async function getTree(env, config, treeSha, recursive = true) {
+  const query = recursive ? '?recursive=1' : ''
+  return githubRequest(env, `${repoBase(config)}/git/trees/${encodeURIComponent(treeSha)}${query}`)
+}
+
+export async function createBlob(env, config, contentBase64) {
+  return githubRequest(env, `${repoBase(config)}/git/blobs`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({ content: contentBase64, encoding: 'base64' })
+  })
+}
+
+export async function createTree(env, config, baseTreeSha, tree) {
+  return githubRequest(env, `${repoBase(config)}/git/trees`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_tree: baseTreeSha, tree })
+  })
+}
+
+export async function createGitCommit(env, config, message, treeSha, parentSha) {
+  return githubRequest(env, `${repoBase(config)}/git/commits`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, tree: treeSha, parents: [parentSha] })
+  })
+}
+
+export async function updateBranchRef(env, config, sha) {
+  return githubRequest(env, `${repoBase(config)}/git/refs/heads/${encodeURIComponent(config.branch)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sha, force: false })
   })
 }
 
 export async function removeContent(env, config, path, sha) {
   const encoded = encodeRepoPath(path)
-  return githubRequest(env, `/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/contents/${encoded}`, {
+  return githubRequest(env, `${repoBase(config)}/contents/${encoded}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -60,10 +97,6 @@ export async function removeContent(env, config, path, sha) {
       branch: config.branch
     })
   })
-}
-
-export async function getBranch(env, config) {
-  return githubRequest(env, `/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/branches/${encodeURIComponent(config.branch)}`)
 }
 
 export function arrayBufferToBase64(buffer) {

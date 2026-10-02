@@ -26,7 +26,7 @@
 
     <nav class="tabs" aria-label="主要功能">
       <button class="tab active" data-tab="upload" type="button">上传</button>
-      <button class="tab" data-tab="manage" type="button">图片管理</button>
+      <button class="tab" data-tab="manage" type="button">文件管理</button>
     </nav>
 
     <main>
@@ -40,18 +40,18 @@
             </div>
           </div>
 
-          <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="选择图片上传">
+          <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="选择文件上传">
             <div class="drop-icon" aria-hidden="true">↑</div>
-            <h2>拖入、粘贴或选择图片</h2>
-            <p>支持批量选择；图片先在浏览器中处理，再由 Cloudflare 安全提交到 GitHub。</p>
-            <button id="chooseFilesBtn" class="primary-btn" type="button">选择图片</button>
-            <input id="fileInput" type="file" accept="image/*" multiple hidden>
+            <h2>拖入、粘贴或选择文件</h2>
+            <p>支持批量上传；一次上传队列只生成一个 Git commit。</p>
+            <button id="chooseFilesBtn" class="primary-btn" type="button">选择文件</button>
+            <input id="fileInput" type="file" multiple hidden>
           </div>
 
           <div class="upload-options">
-            <label class="check-row"><input id="compressToggle" type="checkbox"> <span>自动转换为 WebP</span></label>
-            <label class="check-row"><input id="overwriteToggle" type="checkbox"> <span>允许覆盖同名图片</span></label>
-            <div class="quality-row">
+            <label class="check-row"><input id="compressToggle" type="checkbox"> <span>图片转换为 WebP</span></label>
+            <label class="check-row"><input id="overwriteToggle" type="checkbox"> <span>允许覆盖同名文件</span></label>
+            <div id="qualityRow" class="quality-row hidden">
               <label for="qualityRange">WebP 质量 <strong id="qualityValue">86%</strong></label>
               <input id="qualityRange" type="range" min="60" max="100" step="1" value="86">
             </div>
@@ -62,7 +62,7 @@
           <div class="section-head">
             <div>
               <h2>待上传</h2>
-              <p id="queueSummary">0 张图片</p>
+              <p id="queueSummary">0 个文件</p>
             </div>
             <div class="section-actions">
               <button id="clearQueueBtn" class="ghost-btn" type="button">清空</button>
@@ -77,7 +77,7 @@
         <div class="panel manager-panel">
           <div class="section-head manager-head">
             <div>
-              <h2>图片管理</h2>
+              <h2>文件管理</h2>
               <p id="managerPath">/</p>
             </div>
             <div class="section-actions">
@@ -90,7 +90,7 @@
           </div>
           <div id="managerNotice" class="inline-notice hidden"></div>
           <div id="managerGrid" class="manager-grid"></div>
-          <div id="managerEmpty" class="empty-state hidden">当前目录没有可显示的图片。</div>
+          <div id="managerEmpty" class="empty-state hidden">当前目录没有可显示的文件。</div>
         </div>
       </section>
     </main>
@@ -113,8 +113,8 @@
       <label class="field">
         <span>文件命名</span>
         <select id="namingSetting">
+          <option value="custom">自定义名称（默认保留原文件名）</option>
           <option value="timestamp">时间戳 + 随机码</option>
-          <option value="original">保留原文件名</option>
           <option value="hash">内容哈希</option>
         </select>
       </label>
@@ -141,7 +141,6 @@
   </aside>
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-
   <script type="module" src="/assets/app.js"></script>
 </body>
 </html>
