@@ -55,10 +55,6 @@ v2 使用 GitHub Git Data API，而不是对每个文件分别调用 Contents AP
 以下路径由服务端硬保护：
 - index.html
 - 404.html
-- CNAME
-- vercel.json
-- .settings
-- .deploy
 
 这些路径不能通过 CDN Dash 覆盖、删除或重命名。
 

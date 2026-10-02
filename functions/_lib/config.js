@@ -8,7 +8,7 @@ const DEFAULTS = Object.freeze({
   allowDelete: true,
   allowOverwrite: true,
   allowRename: true,
-  protectedPaths: ['index.html', '404.html', 'CNAME', 'vercel.json', '.settings', '.deploy']
+  protectedPaths: ['index.html', '404.html']
 })
 
 function envString(env, key, fallback = '') {
